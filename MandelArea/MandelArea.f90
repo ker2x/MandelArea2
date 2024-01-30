@@ -4,25 +4,22 @@ implicit none
 
 real, dimension(:), allocatable :: x !x-axis
 real, dimension(:), allocatable :: inside    !notinmset counter
-real, dimension(:), allocatable :: outside   !inmset counter
 
 real    :: r, i !real & imaginary to create a random complex
 complex :: z    !the random complex to be initialized
 integer :: b, j ! loop stuff
 
 integer :: currentiter = 0
-integer, parameter :: startiter = 10            !start at iteration startiter
-integer, parameter :: iterstep = 10        !add(or mult by) iterstep at each batch
-integer, parameter :: batch = 100               !number of point on x-axis
-integer, parameter :: loopmax = 1000000          !montecarlo loop
+integer, parameter :: startiter = 1000            !start at iteration startiter
+integer, parameter :: iterstep = 0        !add(or mult by) iterstep at each batch
+integer, parameter :: batch = 10               !number of point on x-axis
+integer, parameter :: loopmax = 10000000          !montecarlo loop
 
 ALLOCATE(x(batch)) 
 ALLOCATE(inside(batch)) 
-ALLOCATE(outside(batch)) 
 
 x = 0
 inside = 0
-outside = 0 
 currentiter =  startiter
 
 DO b = 1, batch
@@ -31,17 +28,11 @@ end do
 
 DO b = 1, batch
     !x(b) = real(currentiter)
-    !$OMP PARALLEL DO DEFAULT(NONE) SHARED(inside, outside,b,currentiter) private(z,r,i,x)
+    !$OMP PARALLEL DO DEFAULT(NONE) SHARED(inside,b,currentiter) private(z,r,i,x)
     DO j = 1, loopmax
         call random_number(r)
         call random_number(i)    
         z = CMPLX(r*4.0-2.0, i*4.0-2.0)    
-
-!        do while(abs(z) .LT. 2.0)
-!            call random_number(r)
-!            call random_number(i)    
-!            z = CMPLX(r*4.0-2.0, i*4.0-2.0)    
-!        end do
 
         if(isInMSet(z, currentiter)) then
             !$omp atomic update
@@ -49,7 +40,7 @@ DO b = 1, batch
         end if
     end do
     !$OMP END PARALLEL DO
-    print *, b, currentiter, (inside(b) / (loopmax - inside(b)) * 100.0)
+    print *, b, currentiter, inside(b), (inside(b) / (loopmax - inside(b)) * 100.0)
     currentiter = currentiter + iterstep
 end do
 
@@ -58,7 +49,6 @@ print *, "average : ", sum((inside / (loopmax - inside) * 100.0) / batch)
 
 DEALLOCATE(x)
 DEALLOCATE(inside)
-DEALLOCATE(outside)
 
 CONTAINS 
 
@@ -74,6 +64,7 @@ pure function isInMSet(c, maxiter)
     n = 0
     IF(((ABS(c - CMPLX(-1,0))) < 0.25) .OR. ((ABS(1.0 - SQRT(1-(4*c)))) < 1.0)) THEN
         isInMSet = .TRUE.
+        return  ! this if is kind of pointless if i forget the return ^^
     END IF
 
     DO WHILE(ABS(z) < 4 .AND. (n < maxiter))
